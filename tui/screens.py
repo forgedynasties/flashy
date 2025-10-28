@@ -40,3 +40,36 @@ class FlashConfirmScreen(ModalScreen[bool]):
         if self.callback:
             self.callback(result)
         self.dismiss(result)
+
+
+class RebootConfirmScreen(ModalScreen[bool]):
+    """Modal screen to confirm reboot-to-EDL action for an adb-connected device."""
+
+    def __init__(self, device_usb: str, transport_id: str, callback: Optional[Callable[[bool], None]] = None):
+        super().__init__()
+        self.device_usb = device_usb
+        self.transport_id = transport_id
+        self.callback = callback
+
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static(
+                f"[bold]Reboot Device to EDL[/bold]\n\n"
+                f"Device USB path: [cyan]{self.device_usb}[/cyan]\n"
+                f"Transport ID: [yellow]{self.transport_id}[/yellow]\n\n"
+                f"This will reboot the device into EDL mode. Continue?",
+                id="reboot-confirm-message",
+            ),
+            Horizontal(
+                Button("Reboot to EDL", variant="error", id="reboot-yes"),
+                Button("Cancel", variant="primary", id="reboot-no"),
+                classes="button-row"
+            ),
+            id="reboot-confirm-dialog",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        result = event.button.id == "reboot-yes"
+        if self.callback:
+            self.callback(result)
+        self.dismiss(result)

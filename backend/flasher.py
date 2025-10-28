@@ -2,8 +2,9 @@
 
 import subprocess
 import os
+import re
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict
 
 
 def validate_firmware_path(path: str) -> bool:
@@ -30,7 +31,8 @@ def flash_device(
     serial: str, 
     firmware_path: str,
     storage_type: str = "emmc",
-    output_callback: Optional[Callable[[str], None]] = None
+    output_callback: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int], None]] = None
 ) -> int:
     """
     Flash a Qualcomm device via QDL using its serial number.
@@ -40,6 +42,7 @@ def flash_device(
         firmware_path: Directory containing QDL firmware files
         storage_type: Storage type (emmc or ufs), default is emmc
         output_callback: Optional callback function to receive output lines
+        progress_callback: Optional callback to receive progress percentage (0-100)
         
     Returns:
         int: Return code from the QDL process (0 = success)
@@ -73,24 +76,55 @@ def flash_device(
         "patch0.xml"
     ]
     
+    # Progress tracking state
+    total_operations = 0
+    completed_operations = 0
+    
     # Run the command from inside the firmware directory (cd into firmware_path)
-    if output_callback:
+    if output_callback or progress_callback:
         # Stream output to callback
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
-            , cwd=firmware_path
+            bufsize=1,
+            cwd=firmware_path
         )
         
         for line in process.stdout:
             line = line.strip()
             if line:
-                output_callback(line)
+                if output_callback:
+                    output_callback(line)
+                
+                # Parse for progress tracking
+                if progress_callback:
+                    # Count FIREHOSE WRITE commands to track progress
+                    if "FIREHOSE WRITE:" in line:
+                        completed_operations += 1
+                        
+                        # If we haven't counted total yet, estimate based on typical flash
+                        # We'll update as we go. Typical firmware has ~88 writes.
+                        if total_operations == 0:
+                            total_operations = 88  # Reasonable default estimate
+                        
+                        # Update total as we discover more operations
+                        if completed_operations > total_operations:
+                            total_operations = completed_operations
+                        
+                        # Calculate and report progress
+                        if total_operations > 0:
+                            progress = int((completed_operations / total_operations) * 100)
+                            progress = min(progress, 99)  # Reserve 100% for final completion
+                            progress_callback(progress)
         
         process.wait()
+        
+        # Report 100% on successful completion
+        if progress_callback and process.returncode == 0:
+            progress_callback(100)
+        
         return process.returncode
     else:
         # Run without streaming
