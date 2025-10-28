@@ -8,15 +8,6 @@ from typing import Optional, Callable, Dict
 
 
 def validate_firmware_path(path: str) -> bool:
-    """
-    Validate that a firmware path contains required files.
-    
-    Args:
-        path: Directory path to validate
-        
-    Returns:
-        bool: True if path contains .elf and .xml files
-    """
     if not os.path.isdir(path):
         return False
     
@@ -33,22 +24,6 @@ def flash_device(
     storage_type: str = "emmc",
     output_callback: Optional[Callable[[str], None]] = None
 ) -> int:
-    """
-    Flash a Qualcomm device via QDL using its serial number.
-    
-    Args:
-        serial: Serial number of the device
-        firmware_path: Directory containing QDL firmware files
-        storage_type: Storage type (emmc or ufs), default is emmc
-        output_callback: Optional callback function to receive output lines
-        
-    Returns:
-        int: Return code from the QDL process (0 = success)
-        
-    Raises:
-        ValueError: If serial number is empty
-        FileNotFoundError: If firmware path doesn't exist
-    """
     if not serial:
         raise ValueError("Serial number is required")
     

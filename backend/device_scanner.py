@@ -1,21 +1,3 @@
-"""Device scanner for detecting Qualcomm devices.
-
-This module provides utilities to:
-- list adb-connected devices (with transport ids and usb path from `adb devices -l`)
-- enumerate USB devices from sysfs (`/sys/bus/usb/devices`) and read idVendor/idProduct/serial
-- correlate adb entries to sysfs USB devices using the usb path token (e.g. "1-1" or "1-9.1")
-- mark a device as being in 'adb' or (likely) 'edl'
-- provide a safe helper to reboot an adb device into EDL using its transport id
-
-Design notes / assumptions:
-- We prefer reading /sys/bus/usb/devices/* to calling sudo lsusb -v. This avoids requiring sudo and
-  gives the kernel USB device name ("1-1", "1-9.1") which adb also exposes as "usb:1-1".
-- Correlation is done by matching the adb usb:<path> token to the sysfs device directory name.
-- A device appearing in the adb list is considered in adb-mode. If a Qualcomm USB device
-  (vendor 05c6) exists in sysfs but does not appear in adb list, it may be in EDL.
-  This heuristic is not perfect for all vendor/product combinations but works well for common flows.
-"""
-
 import os
 import subprocess
 from typing import Dict, List, Optional

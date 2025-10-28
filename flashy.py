@@ -19,7 +19,7 @@ class DeviceFlasher(App):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh_devices", "Refresh"),
         Binding("space", "toggle_device", "Select"),
-        Binding("e", "reboot_selected", "Reboot -> EDL", show=True),
+        #Binding("e", "reboot_selected", "Reboot to EDL", show=True),
         Binding("f", "flash_selected", "Flash", show=True),
     ]
 
@@ -36,16 +36,36 @@ class DeviceFlasher(App):
         self.flash_status: Dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Static(
+            """
+███████╗██╗      █████╗ ███████╗██╗  ██╗██╗   ██╗
+██╔════╝██║     ██╔══██╗██╔════╝██║  ██║╚██╗ ██╔╝
+█████╗  ██║     ███████║███████╗███████║ ╚████╔╝ 
+██╔══╝  ██║     ██╔══██║╚════██║██╔══██║  ╚██╔╝  
+██║     ███████╗██║  ██║███████║██║  ██║   ██║   
+╚═╝     ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝   
+                                                 
+            """,
+            id="flashy-logo", classes="logo"
+        )
         with Vertical(id="main"):
             with Horizontal(id="firmware-row"):
-                yield Static("FW:", classes="fw-label")
+                #yield Static("FW:", classes="fw-label")
                 yield Input(placeholder="/path/to/firmware", id="firmware-input", value="/home/hwpc/firmware/nfc-debug/qfil_download_emmc/")
             yield DataTable(id="devices-table")
         yield Label("Status: Ready", id="status")
         yield Footer()
 
     CSS = """
+    #flashy-logo {
+        width: 100%;
+        content-align: center middle;
+        color: $accent;
+        text-style: bold;
+        margin-top: 1;
+        margin-bottom: 1;
+    }
+
     #firmware-row {
         height: auto;
         margin: 1;
