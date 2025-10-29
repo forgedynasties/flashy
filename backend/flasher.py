@@ -19,10 +19,11 @@ def validate_firmware_path(path: str) -> bool:
 
 
 def flash_device(
-    serial: str, 
+    serial: str,
     firmware_path: str,
     storage_type: str = "emmc",
-    output_callback: Optional[Callable[[str], None]] = None
+    output_callback: Optional[Callable[[str], None]] = None,
+    logs_dir: Optional[str] = "backend/logs",
 ) -> int:
     if not serial:
         raise ValueError("Serial number is required")
@@ -41,7 +42,6 @@ def flash_device(
 
     cmd = [
         "sudo", qdl_exec,
-        "-d",  # debug output
         "-S", serial,  # device serial
         "--storage", storage_type,
         "prog_firehose_ddr.elf",
@@ -49,29 +49,30 @@ def flash_device(
         "patch0.xml"
     ]
     
-    # Run the command from inside the firmware directory (cd into firmware_path)
-    if output_callback:
-        # Stream output to callback
-        process = subprocess.Popen(
+    # Run the command from inside the firmware directory (cd into firmware_path).
+    # Stream stdout/stderr and call output_callback for each line if provided.
+    prev_cwd = os.getcwd()
+    try:
+        os.chdir(firmware_path)
+        proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=firmware_path
         )
-        
-        for line in process.stdout:
-            line = line.strip()
-            if line:
-                output_callback(line)
-        
-        process.wait()
-        return process.returncode
-    else:
-        # Run without streaming
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=firmware_path)
-        return result.returncode
+
+        # Stream lines to callback if provided
+        if output_callback and proc.stdout is not None:
+            for line in proc.stdout:
+                if line is None:
+                    break
+                output_callback(line.rstrip('\r\n'))
+
+        proc.wait()
+        return proc.returncode
+    finally:
+        os.chdir(prev_cwd)
 
 
 # Compatibility wrapper for old code

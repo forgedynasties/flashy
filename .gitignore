@@ -2,3 +2,6 @@ test.py
 __pycache__/
 .venv/
 GEMINI.md
+qdl.log
+qdl-d.log
+backend/logs/

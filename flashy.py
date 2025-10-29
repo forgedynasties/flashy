@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from backend import correlate_adb_and_usb, adb_reboot_edl, flash_device
+# Display latest streamed log line only; no on-disk parsing required here
 
 
 class DeviceFlasher(App):
@@ -34,6 +35,8 @@ class DeviceFlasher(App):
         self.flashing_devices = set()
         # Flash status: key -> "not started" | "in progress" | "completed"
         self.flash_status: Dict[str, str] = {}
+        # Live latest log line per device (key -> last line)
+        self.last_lines: Dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -52,6 +55,8 @@ class DeviceFlasher(App):
             with Horizontal(id="firmware-row"):
                 #yield Static("FW:", classes="fw-label")
                 yield Input(placeholder="/path/to/firmware", id="firmware-input", value="/home/hwpc/firmware/nfc-debug/qfil_download_emmc/")
+                # Optional expected partitions input to compute percentage progress
+                #yield Input(placeholder="expected partitions (optional)", id="expected-input", value="")
             yield DataTable(id="devices-table")
         yield Label("Status: Ready", id="status")
         yield Footer()
@@ -119,9 +124,9 @@ class DeviceFlasher(App):
 
         self.devices = qual
 
-        # Rebuild table (no progress column)
+        # Rebuild table (Progress column shows latest streamed log line)
         table.clear(columns=True)
-        table.add_columns("Sel", "Serial", "Status", "Flash")
+        table.add_columns("Sel", "Serial", "Status", "Progress", "Flash")
 
         if not qual:
             table.add_row(" ", "No Qualcomm devices found", "—", "—")
@@ -150,9 +155,16 @@ class DeviceFlasher(App):
             
             # Show flash status
             flash_status = self.flash_status.get(key, "not started")
-            
-            # No numeric progress column — show status only
-            table.add_row(sel, serial_str, device_status, flash_status)
+
+            # Show latest streamed log line or a placeholder
+            latest_line = self.last_lines.get(key)
+            if latest_line:
+                # keep the cell compact
+                progress_cell = latest_line if len(latest_line) <= 80 else latest_line[:77] + "..."
+            else:
+                progress_cell = "—"
+
+            table.add_row(sel, serial_str, device_status, progress_cell, flash_status)
 
         status.update(f"Status: {len(self.devices)} device(s)")
         
@@ -275,6 +287,7 @@ class DeviceFlasher(App):
         for key, device in all_devices_to_flash:
             self.flashing_devices.add(key)
             self.flash_status[key] = "in progress"
+            # no progress counts — we will display the latest log line only
             self.flash_device_bg(key, device, firmware_path)
         
         self.call_from_thread(self.refresh_devices_table)
@@ -297,15 +310,40 @@ class DeviceFlasher(App):
         if not serial:
             serial = device.get("usb") or key
         
+        # Define a simple line callback: store the latest line and refresh UI
+        def _line_cb(line: str) -> None:
+            try:
+                self.last_lines[key] = line
+            except Exception:
+                pass
+            # refresh UI to show the latest line in Progress column
+            try:
+                self.call_from_thread(self.refresh_devices_table, True)
+            except Exception:
+                pass
+            # update a compact status line for the user
+            try:
+                self.call_from_thread(status.update, f"Status: {serial} | {line}")
+            except Exception:
+                pass
+
         try:
+            # Run flash in streaming-only mode (no writing to file) and pass the callback
             returncode = flash_device(
                 serial,
-                firmware_path
+                firmware_path,
+                output_callback=_line_cb,
+                logs_dir=None,
             )
             
             if returncode == 0:
                 self.call_from_thread(status.update, f"Status: {serial} flashed successfully")
                 self.flash_status[key] = "completed"
+                # final refresh to ensure progress shows final count
+                try:
+                    self.call_from_thread(self.refresh_devices_table, True)
+                except Exception:
+                    pass
             else:
                 self.call_from_thread(status.update, f"Status: {serial} flash failed (code {returncode})")
                 self.flash_status[key] = "failed"
